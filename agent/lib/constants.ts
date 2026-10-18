@@ -1,5 +1,3 @@
-import { connect } from "@vercel/connect/eve";
-
 /**
  * Reads a required environment variable, throwing if it is unset so
  * misconfiguration fails fast instead of surfacing mid-request.
@@ -33,6 +31,10 @@ export function requireEnv(name: string, example: string): string {
  * the push URL.
  */
 export const FACTORY_REPO = requireEnv("FACTORY_REPO", "acme/widgets");
+
+/** Baseline selected by station setup; station pushes must never update it. */
+export const FACTORY_BASE_BRANCH =
+  process.env.FACTORY_BASE_BRANCH ?? "bootstrap/node24-self-hosting";
 
 // GitHub's own naming rules: owner is alphanumeric with inner hyphens, repo
 // adds dots and underscores. Catching a malformed value here fails discovery
@@ -74,35 +76,8 @@ export const FACTORY_LABEL = process.env.FACTORY_LABEL ?? "factory";
  * the red-CI fix loop never runs on branches people pushed. The implementer's
  * instructions carry the default prefix as prose, so an override should keep
  * them in sync (`agent/subagents/implementer/instructions.md`).
+ * This controls intake recognition only; station pushes remain restricted
+ * to the `factory/` namespace regardless of this setting.
  */
 export const FACTORY_BRANCH_PREFIX =
   process.env.FACTORY_BRANCH_PREFIX ?? "factory/";
-
-/**
- * Shared Linear authorization via Vercel Connect.
- *
- * Single source of truth for the Linear connector so every consumer — the
- * Linear MCP connection and any tool calling the GraphQL API directly —
- * shares one Linear installation and one set of scopes.
- *
- * @remarks
- * - App-scoped (`principalType: "app"`), so no per-user consent flow is
- *   required; tokens are minted for the installation itself.
- * - Tokens are requested per call via `ctx.getToken(linearAuth)`, cached per
- *   step by eve, and never exposed to the model.
- * - The connector UID comes from the `LINEAR_CONNECTOR` environment variable
- *   (e.g. `linear/foreman-agent`); the module throws at load time if it
- *   is not set.
- *
- * @example
- * ```ts
- * const { token } = await ctx.getToken(linearAuth);
- * ```
- */
-export const linearAuth = connect({
-  connector: requireEnv("LINEAR_CONNECTOR", "linear/foreman-agent"),
-  principalType: "app",
-  tokenParams: {
-    scopes: ["read", "write", "issues:create", "comments:create"],
-  },
-});

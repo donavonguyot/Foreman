@@ -21,7 +21,7 @@ import { environment } from "../sandbox.js";
  * git command line.
  */
 export default defineTool({
-  description: `Fetch an existing branch of the factory repository and check it out in ${REPO_DIR}. Use this on a revision run, when the reviewer's findings name a branch that already exists; fresh work starts from the default branch with plain git instead.`,
+  description: `Fetch an existing branch of the factory repository and check it out in ${REPO_DIR}. Use this on a revision run, when the reviewer's findings name a branch that already exists; fresh work starts from the configured baseline branch with plain git instead.`,
   async execute(input, ctx) {
     const refusal = validateBranch(input.branch);
     if (refusal) {
