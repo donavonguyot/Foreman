@@ -32,6 +32,10 @@ export function requireEnv(name: string, example: string): string {
  */
 export const FACTORY_REPO = requireEnv("FACTORY_REPO", "acme/widgets");
 
+/** Baseline selected by station setup; station pushes must never update it. */
+export const FACTORY_BASE_BRANCH =
+  process.env.FACTORY_BASE_BRANCH ?? "bootstrap/node24-self-hosting";
+
 // GitHub's own naming rules: owner is alphanumeric with inner hyphens, repo
 // adds dots and underscores. Catching a malformed value here fails discovery
 // with a clear message instead of a cryptic clone error on a station's first session.
@@ -72,6 +76,8 @@ export const FACTORY_LABEL = process.env.FACTORY_LABEL ?? "factory";
  * the red-CI fix loop never runs on branches people pushed. The implementer's
  * instructions carry the default prefix as prose, so an override should keep
  * them in sync (`agent/subagents/implementer/instructions.md`).
+ * This controls intake recognition only; station pushes remain restricted
+ * to the `factory/` namespace regardless of this setting.
  */
 export const FACTORY_BRANCH_PREFIX =
   process.env.FACTORY_BRANCH_PREFIX ?? "factory/";

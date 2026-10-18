@@ -1,5 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
+import { FACTORY_BASE_BRANCH } from "../../../lib/constants.js";
 import { githubCredentials } from "../../../lib/github/credentials.js";
 import {
   brokerPolicy,
@@ -8,6 +9,7 @@ import {
   REPO_DIR,
   validateBranch,
 } from "../../../lib/github/git-remote.js";
+import { validatePushTarget } from "../../../lib/github/push-policy.js";
 import { environment } from "../sandbox.js";
 
 /**
@@ -15,18 +17,20 @@ import { environment } from "../sandbox.js";
  * repository.
  *
  * @remarks
- * The push is inert by construction, which is why it runs without approval:
- * `validateBranch` refuses `main`, `master`, and anything that isn't a plain
- * branch name, so nothing this tool does can change the default branch or
- * merge. The credential is brokered at the sandbox firewall and never enters
+ * `validateBranch` checks branch syntax and refuses main/master;
+ * `validatePushTarget` restricts writes to factory/ feature branches and
+ * refuses the configured baseline even inside that namespace. Both checks
+ * run before sandbox or credential access. The credential never enters
  * the sandbox, and the push targets {@link REMOTE_URL} literally, never the
  * model-writable `origin` remote. The `finally` block drops the brokered
  * credential again.
  */
 export default defineTool({
-  description: `Push a local branch of the ${REPO_DIR} checkout to the factory repository. The branch must already exist locally with the work committed and the checks run; main and master are refused. After a successful push, report the branch name in your structured output so the orchestrator can open the pull request.`,
+  description: `Push a local factory/ feature branch of the ${REPO_DIR} checkout to the factory repository. The branch must already exist locally with the work committed and the checks run; main, master, and the configured baseline are refused. After a successful push, report the branch name in your structured output so the orchestrator can open the pull request.`,
   async execute(input, ctx) {
-    const refusal = validateBranch(input.branch);
+    const refusal =
+      validateBranch(input.branch) ??
+      validatePushTarget(input.branch, FACTORY_BASE_BRANCH);
     if (refusal) {
       return { error: refusal, success: false as const };
     }

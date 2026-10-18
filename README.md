@@ -44,13 +44,13 @@ pnpm dev
 
 The linked Vercel project is `artaizen/foreman`. Its development environment supplies `GITHUB_CONNECTOR=github/foreman`, `FACTORY_REPO=donavonguyot/Foreman`, and `FACTORY_SETUP_COMMAND` from `.env.example`. The GitHub App is installed only on this fork. Connector webhook triggers remain off; start the first issue explicitly through the TUI.
 
-`FACTORY_SETUP_COMMAND` fetches and checks out the bootstrap branch before installing dependencies in each station. Once bootstrap is merged, replace it with `pnpm install --frozen-lockfile` and base subsequent tasks on the default branch.
+`FACTORY_SETUP_COMMAND` fetches and checks out the bootstrap branch before installing dependencies in each station. `FACTORY_BASE_BRANCH` defaults to `bootstrap/node24-self-hosting` and must match the branch selected by setup. Station pushes are restricted to `factory/` feature branches and explicitly reject that baseline, even if it is inside `factory/`. Once bootstrap is merged, set `FACTORY_BASE_BRANCH=main`, replace setup with `pnpm install --frozen-lockfile`, and base subsequent tasks on the default branch. Update the Vercel Development settings and pull them locally together.
 
 The dev server binds to loopback and disables Eve's bundled self-modification extension. The running baseline therefore delegates code changes to the sandboxed factory stations. Keep candidate runs separate from the baseline, with their own local Workflow data and no webhook ingress. The first compatibility task must not launch another factory pipeline recursively.
 
 Local workflow state stays local. Code execution still uses Vercel Sandbox, GitHub credentials use Vercel Connect, model calls use AI Gateway, and memory/artifacts use Vercel Blob. The public `foreman-memory` store is for this public-code pilot; do not put credentials or private notes into factory memory. No Next.js application or Postgres database is required.
 
-`pnpm validate` checks formatting, types, and discovered capabilities. `pnpm build` verifies the build. Evals and live runs consume model/sandbox resources; the full-pipeline eval also pushes a real branch. Run the first issue once, then inspect its evidence before repeating it.
+`pnpm validate` checks formatting, types, push-policy tests, and discovered capabilities. `pnpm build` verifies the build. Evals and live runs consume model/sandbox resources; the full-pipeline eval also pushes a real branch. Run the first issue once, then inspect its evidence before repeating it.
 
 ## Resources
 

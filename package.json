@@ -17,8 +17,9 @@
     "fix": "ultracite fix",
     "info": "node --env-file-if-exists=.env.local node_modules/eve/bin/eve.js info",
     "start": "eve start",
+    "test": "node --test tests/*.test.mjs",
     "typecheck": "tsc",
-    "validate": "pnpm run check && pnpm run typecheck && pnpm run info"
+    "validate": "pnpm run check && pnpm run typecheck && pnpm test && pnpm run info"
   },
   "dependencies": {
     "@github-tools/eve-extension": "^0.8.0",

@@ -24,7 +24,8 @@ pnpm build          # eve build
 pnpm eval           # eve eval — run the evals suite (see tags below; costs real tokens)
 eve deploy          # deploy to Vercel production (use this, not raw `vercel deploy`)
 npx eve info        # print the discovered surface + discovery diagnostics
-pnpm validate       # check + typecheck + eve info in one command
+pnpm test           # deterministic push-policy tests; no models or credentials
+pnpm validate       # check + typecheck + test + eve info in one command
 ```
 
 **Verify changes with `pnpm validate` (lint, typecheck, and discovery diagnostics must all report 0 errors / 0 warnings), then exercise the agent in the `pnpm dev` TUI.** The evals suite (`pnpm eval --tag fast`) guards routing and safety behavior; `pnpm eval pipeline/full-pipeline` runs the whole line and pushes a real branch, so run it deliberately and against a scratch repo.
@@ -58,7 +59,7 @@ pnpm validate       # check + typecheck + eve info in one command
 
 - **Never ask the user for API keys, client secrets, or any other credentials.**
 - **Never commit secrets.** `.env*` is gitignored. Connector UIDs are read from env (`GITHUB_CONNECTOR`); GitHub auth is brokered by Vercel Connect (tokens resolved per call, never exposed to the model) and Blob auth is via the project's OIDC token. `FACTORY_REPO` is required at module load (`requireEnv`), so a missing value fails discovery; `FACTORY_SETUP_COMMAND` is optional.
-- **Git safety is structural; keep it that way.** Sandbox git always targets the literal `https://github.com/<FACTORY_REPO>.git` URL, never `origin` (remote config in a sandbox is model-writable), with the installation token injected at the sandbox firewall (`brokerPolicy`) so it never enters the sandbox. Everything interpolated into a git command passes `validateBranch`, which also refuses `main`/`master`. Don't weaken these when adding git capabilities.
+- **Git safety is structural; keep it that way.** Sandbox git always targets the literal `https://github.com/<FACTORY_REPO>.git` URL, never `origin` (remote config in a sandbox is model-writable), with the installation token injected at the sandbox firewall (`brokerPolicy`) so it never enters the sandbox. Everything interpolated into a git command passes `validateBranch`, which also refuses `main`/`master`. Station pushes additionally pass `validatePushTarget`, which permits only `factory/` feature branches and rejects `FACTORY_BASE_BRANCH` (default `bootstrap/node24-self-hosting`). Keep this baseline setting aligned with `FACTORY_SETUP_COMMAND`. Don't weaken these when adding git capabilities.
 - **Respect the trust model.** Trust is stamped at dispatch by the channels; unattended runs are denied writes (except labels, comments scoped to their stamped intake issue, close/reopen, and draft PRs) rather than parked. When adding a tool or connection, pick its policy from `agent/lib/github/approval.ts` (or the trust predicates) instead of hardcoding `"never"`.
 - If you ever build a `RegExp` from data, escape it (literal match) and bound the input length.
 - Gate irreversible or high-impact actions behind `approval` (here: `clear_user_preferences`, plus the ship-gate policies on the GitHub extension).
