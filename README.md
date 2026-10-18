@@ -30,7 +30,7 @@ Each station is its own agent with its own instructions, sandbox, and tools. The
 
 ## Personal pilot
 
-This fork targets `donavonguyot/Foreman` itself. The bootstrap branch is `bootstrap/node24-self-hosting`; the first Node 26 compatibility draft PR targets that branch so its diff excludes bootstrap changes. Neither PR is merged or marked ready automatically.
+This fork targets `donavonguyot/Foreman` itself. Bootstrap and Node 26 compatibility are merged on this personal fork; the baseline is now `main`. New work stays in draft PRs for human review. Nothing is pushed to the original project.
 
 Use Node 24.22.0 (`.nvmrc` and `.node-version`) and pnpm 12.14.0. The deployment engine remains `24.x`: Vercel Functions supports Node 24.x and 22.x, not 26. Node 26 is additionally verified for local development and CI only — see [docs/node-compatibility.md](docs/node-compatibility.md) for the evidence and the `node-compatibility` workflow that re-checks both runtimes. Linear is disabled: no Linear channel, MCP connection, credential requirement, or bridging skill is loaded.
 
@@ -42,15 +42,15 @@ pnpm validate
 pnpm dev
 ```
 
-The linked Vercel project is `artaizen/foreman`. Its development environment supplies `GITHUB_CONNECTOR=github/foreman`, `FACTORY_REPO=donavonguyot/Foreman`, and `FACTORY_SETUP_COMMAND` from `.env.example`. The GitHub App is installed only on this fork. Connector webhook triggers remain off; start the first issue explicitly through the TUI.
+The linked Vercel project is `artaizen/foreman`. Its development environment supplies `GITHUB_CONNECTOR=github/foreman`, `FACTORY_REPO=donavonguyot/Foreman`, and `FACTORY_SETUP_COMMAND` from `.env.example`. The GitHub App is installed only on this fork. Connector webhook triggers remain off; new runs require an explicit request.
 
-`FACTORY_SETUP_COMMAND` fetches and checks out the bootstrap branch before installing dependencies in each station. `FACTORY_BASE_BRANCH` defaults to `bootstrap/node24-self-hosting` and must match the branch selected by setup. Station pushes are restricted to `factory/` feature branches and explicitly reject that baseline, even if it is inside `factory/`. Once bootstrap is merged, set `FACTORY_BASE_BRANCH=main`, replace setup with `pnpm install --frozen-lockfile`, and base subsequent tasks on the default branch. Update the Vercel Development settings and pull them locally together.
+`FACTORY_SETUP_COMMAND=pnpm install --frozen-lockfile` installs dependencies after each station clones the repository default, `main`. `FACTORY_BASE_BRANCH` defaults to `main` and must stay aligned with that checkout. Station pushes are restricted to `factory/` feature branches and explicitly reject the baseline, even if it is inside `factory/`.
 
-The dev server binds to loopback and disables Eve's bundled self-modification extension. The running baseline therefore delegates code changes to the sandboxed factory stations. Keep candidate runs separate from the baseline, with their own local Workflow data and no webhook ingress. The first compatibility task must not launch another factory pipeline recursively.
+The dev server binds to loopback and disables Eve's bundled self-modification extension. The running baseline therefore delegates code changes to the sandboxed factory stations. Keep candidate runs separate from the baseline, with their own local Workflow data and no webhook ingress. A task must not launch another factory pipeline recursively.
 
 Local workflow state stays local. Code execution still uses Vercel Sandbox, GitHub credentials use Vercel Connect, model calls use AI Gateway, and memory/artifacts use Vercel Blob. The public `foreman-memory` store is for this public-code pilot; do not put credentials or private notes into factory memory. No Next.js application or Postgres database is required.
 
-`pnpm validate` checks formatting, types, push-policy tests, and discovered capabilities. `pnpm build` verifies the build. Evals and live runs consume model/sandbox resources; the full-pipeline eval also pushes a real branch. Run the first issue once, then inspect its evidence before repeating it.
+`pnpm validate` checks formatting, types, deterministic tests, and discovered capabilities. `pnpm build --skip-sandbox-prewarm` verifies compilation without provisioning a sandbox. Evals and live runs consume model/sandbox resources; the full-pipeline eval also pushes a real branch. See [run limits](docs/run-limits.md) for stage budgets, time boundaries, one revision maximum, and checkpoint drafts that preserve pushed work when a run stops. Do not start another run without an explicit request.
 
 ## Resources
 

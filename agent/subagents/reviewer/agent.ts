@@ -1,5 +1,6 @@
 import { defineAgent } from "eve";
 import { MODELS } from "../../lib/models.js";
+import { RUN_POLICY } from "../../lib/run-policy.js";
 
 /**
  * Station 4: independent review.
@@ -26,6 +27,9 @@ export default defineAgent({
     "code. The caller passes the work item, the analysis with acceptance criteria, the " +
     "branch name, and the implementer's report in the message, plus an artifact id when " +
     "the analyst saved its full detail as one.",
+  limits: {
+    maxOutputTokensPerSession: RUN_POLICY.reviewer.outputTokens + 2000,
+  },
   model: MODELS.reviewer,
   tool: false,
 });

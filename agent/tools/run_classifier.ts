@@ -17,10 +17,19 @@ export default defineWorkflowTool({
     "the work item verbatim in the message.",
   async execute({ message }, ctx) {
     "use workflow";
-    return await ctx.agent("classifier", {
-      message,
-      outputSchema: CLASSIFIER_OUTPUT_SCHEMA,
-    });
+    try {
+      return await ctx.agent("classifier", {
+        message,
+        outputSchema: CLASSIFIER_OUTPUT_SCHEMA,
+      });
+    } catch {
+      return {
+        reason:
+          "Station stopped or failed. Do not retry. Preserve any pushed draft, report incomplete checks and unresolved findings, and hand off to a person. Inspect the child trace for the exact stop reason.",
+        stage: "classifier",
+        stopped: true,
+      };
+    }
   },
   inputSchema: z.object({
     message: z

@@ -19,10 +19,19 @@ export default defineWorkflowTool({
     "the analyst saved its full detail as one.",
   async execute({ message }, ctx) {
     "use workflow";
-    return await ctx.agent("reviewer", {
-      message,
-      outputSchema: REVIEWER_OUTPUT_SCHEMA,
-    });
+    try {
+      return await ctx.agent("reviewer", {
+        message,
+        outputSchema: REVIEWER_OUTPUT_SCHEMA,
+      });
+    } catch {
+      return {
+        reason:
+          "Station stopped or failed. Do not retry. Preserve any pushed draft, report incomplete checks and unresolved findings, and hand off to a person. Inspect the child trace for the exact stop reason.",
+        stage: "reviewer",
+        stopped: true,
+      };
+    }
   },
   inputSchema: z.object({
     message: z

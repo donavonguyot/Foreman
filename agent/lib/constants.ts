@@ -33,8 +33,7 @@ export function requireEnv(name: string, example: string): string {
 export const FACTORY_REPO = requireEnv("FACTORY_REPO", "acme/widgets");
 
 /** Baseline selected by station setup; station pushes must never update it. */
-export const FACTORY_BASE_BRANCH =
-  process.env.FACTORY_BASE_BRANCH ?? "bootstrap/node24-self-hosting";
+export const FACTORY_BASE_BRANCH = process.env.FACTORY_BASE_BRANCH ?? "main";
 
 // GitHub's own naming rules: owner is alphanumeric with inner hyphens, repo
 // adds dots and underscores. Catching a malformed value here fails discovery

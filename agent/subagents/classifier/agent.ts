@@ -1,5 +1,6 @@
 import { defineAgent } from "eve";
 import { MODELS } from "../../lib/models.js";
+import { RUN_POLICY } from "../../lib/run-policy.js";
 
 /**
  * Station 1: triage.
@@ -23,6 +24,9 @@ export default defineAgent({
     "priority, complexity, affected area, and whether it is actionable or needs " +
     "clarification. Fast triage only; no analysis or implementation. The caller passes " +
     "the work item verbatim in the message.",
+  limits: {
+    maxOutputTokensPerSession: RUN_POLICY.classifier.outputTokens + 2000,
+  },
   model: MODELS.classifier,
   tool: false,
 });

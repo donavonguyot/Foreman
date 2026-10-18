@@ -19,10 +19,19 @@ export default defineWorkflowTool({
     "save its own deep supporting detail as an analysis artifact and return the id.",
   async execute({ message }, ctx) {
     "use workflow";
-    return await ctx.agent("analyst", {
-      message,
-      outputSchema: ANALYST_OUTPUT_SCHEMA,
-    });
+    try {
+      return await ctx.agent("analyst", {
+        message,
+        outputSchema: ANALYST_OUTPUT_SCHEMA,
+      });
+    } catch {
+      return {
+        reason:
+          "Station stopped or failed. Do not retry. Preserve any pushed draft, report incomplete checks and unresolved findings, and hand off to a person. Inspect the child trace for the exact stop reason.",
+        stage: "analyst",
+        stopped: true,
+      };
+    }
   },
   inputSchema: z.object({
     message: z

@@ -1,5 +1,6 @@
 import { defineAgent } from "eve";
 import { MODELS } from "../../lib/models.js";
+import { RUN_POLICY } from "../../lib/run-policy.js";
 
 /**
  * Fresh-context web-research subagent.
@@ -29,6 +30,9 @@ export default defineAgent({
     "cited findings with confidence levels, plus the gaps it couldn't verify. May save a " +
     "long research memo as an artifact and return its id for later stations. The caller " +
     "passes the question and any known context in the message.",
+  limits: {
+    maxOutputTokensPerSession: RUN_POLICY.researcher.outputTokens + 2000,
+  },
   model: MODELS.researcher,
   tool: false,
 });
