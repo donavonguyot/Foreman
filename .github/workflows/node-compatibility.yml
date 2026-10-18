@@ -7,7 +7,7 @@ name: Node compatibility
 # Node 24.x and 22.x, not 26.
 #
 # FACTORY_REPO=foreman-ci/compatibility is a harmless placeholder used only
-# so static discovery/compile steps have a repository value. No credentials,
+# so static discovery/compile steps have a repository value. No project secrets,
 # Connect, Blob, model calls, GitHub tasks, evals, or sandbox prewarm run here.
 
 on:
@@ -17,9 +17,9 @@ on:
   pull_request:
   workflow_dispatch:
 
-# The job never uses the workflow token: sources are fetched anonymously
-# (public repository) and every other step is local. Empty permissions make
-# the token useless even if something tried to read it.
+# Sources are fetched anonymously and setup-node's token input is empty.
+# Request no repository permissions; GitHub Actions cache authentication is
+# separate from the repository and Foreman credentials used by this pilot.
 permissions: {}
 
 jobs:
@@ -60,6 +60,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
+          # Override the action's implicit github.token input.
+          token: ""
           node-version: ${{ matrix.node-version }}
           cache: pnpm
 

@@ -136,7 +136,7 @@ a `mktemp -d` directory that the trap removes.
 
 ### Credential boundary
 
-The workflow never uses a credential:
+The compatibility checks require no repository secrets or Foreman service credentials:
 
 - Sources are fetched **anonymously** over HTTPS (`git init` +
   `git fetch`): the repository is public and the job is read-only.
@@ -145,23 +145,12 @@ The workflow never uses a credential:
   local git configuration. The checkout step asserts that nothing
   credential-like (`credential`/`authorization`/`extraheader`) ends up in
   git config and fails otherwise.
-- The workflow declares `permissions: {}`, so the automatic `GITHUB_TOKEN`
-  for the job carries no scopes even though the runner still receives one;
-  no step references it.
-- No repository or organization secrets are read, and no step talks to
-  Vercel Connect, Blob, models, or the GitHub API.
-- The only Actions-infrastructure token in play is the internal runtime
-  token that `actions/setup-node`'s pnpm-store cache uses; that is runner
-  plumbing for the cache service, not a repository credential, and it is
-  not exposed to any repository-defined command.
+- The workflow declares `permissions: {}` to request no repository permissions. This does not mean GitHub stops issuing a job token.
+- `actions/setup-node@v4` receives an explicit `token: ""`, overriding its default `github.token` input. Node distribution requests therefore use no supplied GitHub token. See the [action's token input](https://github.com/actions/setup-node/blob/v4/action.yml).
+- No repository or organization secrets are read, and the checks do not call Vercel Connect, Blob, models, or start real factory tasks.
+- GitHub Actions infrastructure, including the pnpm-store cache, can still use its own runtime authentication. These checks do not claim that the runner is a credential-free environment.
 
-This workflow has not yet produced a CI run at the time of writing, so the
-tables above are the verified evidence; the workflow steps (including the
-literal dev-server shell fragment and the anonymous checkout fragment) were
-executed locally under both Node versions as described. If a runner image
-ever lacks `libatomic.so.1`, the Node 26 job will fail at `node` startup
-and the workaround above applies; GitHub-hosted `ubuntu-latest` images were
-not independently inspected for it here.
+The initial workflow passed both matrix jobs in [GitHub Actions](https://github.com/donavonguyot/Foreman/actions/runs/39158198037). That run predates the explicit empty `setup-node` token input; check the PR's checks for validation of the latest revision. The tables above record the original local evidence. If a runner image lacks `libatomic.so.1`, the Node 26 job will fail at startup and the workaround above applies.
 
 ## Coverage classification and limitations
 
