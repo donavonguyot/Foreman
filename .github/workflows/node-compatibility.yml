@@ -38,15 +38,18 @@ jobs:
       # needs read-only sources, so no token is used at any point and nothing
       # credential-like is written to git configuration. (actions/checkout
       # would default to `github.token` and persist it into git config.)
-      # GITHUB_SHA is an advertised tip (branch head or PR merge ref) at
-      # trigger time; fall back to the event ref if the tip moved since.
+      # Fetch only the triggering commit. If it is unavailable, fail instead
+      # of reporting checks for a different commit after a ref moves.
       - name: Check out (anonymous, credential-free)
         run: |
           git init -q .
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
-          git fetch -q --depth 1 origin "$GITHUB_SHA" \
-            || git fetch -q --depth 1 origin "$GITHUB_REF"
+          git fetch -q --depth 1 origin "$GITHUB_SHA"
           git -c advice.detachedHead=false checkout -q --detach FETCH_HEAD
+          if [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo 'checkout does not match the triggering commit' >&2
+            exit 1
+          fi
           git log -1 --format='checked out %H'
           if git config --local --list | grep -i -E 'credential|authorization|extraheader'; then
             echo 'unexpected credential material in git config' >&2
@@ -78,6 +81,9 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Push-policy regression tests
+        run: pnpm test
 
       # `pnpm run info` is required: bare `pnpm info` resolves to pnpm's
       # built-in registry command, not the package script.

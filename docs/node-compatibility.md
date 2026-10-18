@@ -119,7 +119,7 @@ is required; `pnpm build -- --skip-sandbox-prewarm` forwards the literal
 `.github/workflows/node-compatibility.yml` repeats the same sequence on a
 Node `24.22.0` / `26` matrix with pnpm 12.14.0 (via `pnpm/action-setup`,
 honoring the `packageManager` pin): frozen install, `pnpm check`,
-`pnpm typecheck`, discovery (`pnpm run info`), compiled-only build with
+`pnpm typecheck`, push-policy tests (`pnpm test`), discovery (`pnpm run info`), compiled-only build with
 `--skip-sandbox-prewarm`, and a bounded (60s) loopback health probe of the
 dev server.
 
@@ -145,6 +145,7 @@ The compatibility checks require no repository secrets or Foreman service creden
   local git configuration. The checkout step asserts that nothing
   credential-like (`credential`/`authorization`/`extraheader`) ends up in
   git config and fails otherwise.
+- Checkout fetches only `GITHUB_SHA` and verifies that `HEAD` matches it. If the triggering commit is unavailable, the job fails instead of testing a newer branch or PR merge ref.
 - The workflow declares `permissions: {}` to request no repository permissions. This does not mean GitHub stops issuing a job token.
 - `actions/setup-node@v4` receives an explicit `token: ""`, overriding its default `github.token` input. Node distribution requests therefore use no supplied GitHub token. See the [action's token input](https://github.com/actions/setup-node/blob/v4/action.yml).
 - No repository or organization secrets are read, and the checks do not call Vercel Connect, Blob, models, or start real factory tasks.
