@@ -18,10 +18,19 @@ export default defineWorkflowTool({
     "passes the question and any known context in the message.",
   async execute({ message }, ctx) {
     "use workflow";
-    return await ctx.agent("researcher", {
-      message,
-      outputSchema: RESEARCHER_OUTPUT_SCHEMA,
-    });
+    try {
+      return await ctx.agent("researcher", {
+        message,
+        outputSchema: RESEARCHER_OUTPUT_SCHEMA,
+      });
+    } catch {
+      return {
+        reason:
+          "Station stopped or failed. Do not retry. Preserve any pushed draft, report incomplete checks and unresolved findings, and hand off to a person. Inspect the child trace for the exact stop reason.",
+        stage: "researcher",
+        stopped: true,
+      };
+    }
   },
   inputSchema: z.object({
     message: z

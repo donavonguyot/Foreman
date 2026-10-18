@@ -16,7 +16,11 @@ The factory's target repository is checked out at `/workspace/repo`, on the conf
 3. Match the conventions visible in the surrounding code and in the plan's stated assumptions: style, naming, error handling, framework idioms.
 4. Verify with the repository's own checks: the lint, typecheck, and test commands the analysis names, or the ones you find in package.json or CI config. Run them and record exactly what you ran and what it produced. If something could not be verified, say so explicitly rather than implying it works.
 5. Keep the change minimal. Do not refactor unrelated code, reformat files, or improve things outside the plan's scope.
-6. Commit with clear messages, then finish by calling `push_branch` with your branch name. The push is your delivery; the orchestrator opens the pull request after review.
+6. Commit the first useful, coherent change and call `push_branch` early, before lengthy checks. Include an honest `summary` of completed and pending checks and known limitations. The tool creates a checkpoint draft immediately. Continue focused verification, commit fixes, and push again to the same branch. Do not create empty commits just to open a PR. If the tool reports `stopped`, return immediately and explain the draft failure in `known_limitations`.
 7. The checkout already carries the factory's git identity. Never configure `user.name` or `user.email`, and never pass `--author` to a commit.
 
 You cannot ask questions mid-run. When the plan leaves something genuinely open, make the narrowest reasonable choice and record it in `deviations`; when no reasonable choice exists, stop, set `pushed` to false, and explain in `known_limitations`.
+
+## Bounded work
+
+Each attempt has an eight-minute, 10,000-output-token, 30-model-call budget, checked between calls. Checkpoint early; do not save all delivery until the end. Keep commands bounded where supported. When blocked, stop exploring, preserve the useful committed work with `push_branch`, and return incomplete checks and unresolved findings honestly. There is only one revision attempt. Do not broaden scope, repeat successful checks without a new reason, or start another factory run.

@@ -1,6 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { FACTORY_BASE_BRANCH } from "../../../lib/constants.js";
+import { FACTORY_BASE_BRANCH, FACTORY_REPO } from "../../../lib/constants.js";
+import { ensureCheckpointDraft } from "../../../lib/github/checkpoint-draft.js";
 import { githubCredentials } from "../../../lib/github/credentials.js";
 import {
   brokerPolicy,
@@ -26,7 +27,7 @@ import { environment } from "../sandbox.js";
  * credential again.
  */
 export default defineTool({
-  description: `Push a local factory/ feature branch of the ${REPO_DIR} checkout to the factory repository. The branch must already exist locally with the work committed and the checks run; main, master, and the configured baseline are refused. After a successful push, report the branch name in your structured output so the orchestrator can open the pull request.`,
+  description: `Push a committed factory/ feature branch of the ${REPO_DIR} checkout and ensure it has a draft PR on the configured baseline. Push the first useful checkpoint before lengthy checks or revisions; describe completed and pending checks honestly in summary. Main, master, and the baseline are refused. If draft creation fails, stop and report the pushed branch for manual recovery.`,
   async execute(input, ctx) {
     const refusal =
       validateBranch(input.branch) ??
@@ -52,8 +53,29 @@ export default defineTool({
       const head = await sandbox.run({
         command: `git -C ${REPO_DIR} rev-parse '${input.branch}'`,
       });
+      let draft: { number: number; url: string };
+      try {
+        draft = await ensureCheckpointDraft(
+          {
+            base: FACTORY_BASE_BRANCH,
+            branch: input.branch,
+            repo: FACTORY_REPO,
+            summary: input.summary,
+          },
+          token
+        );
+      } catch {
+        return {
+          branch: input.branch,
+          error:
+            "Branch pushed, but its draft PR could not be confirmed. Stop and report this branch for manual recovery; do not continue implementation or review.",
+          stopped: true,
+          success: true as const,
+        };
+      }
       return {
         branch: input.branch,
+        draft,
         sha: String(head.stdout).trim(),
         success: true as const,
       };
@@ -67,6 +89,13 @@ export default defineTool({
       .min(1)
       .describe(
         "Branch name in /workspace/repo to push, e.g. factory/bug-dedupe-reset-emails"
+      ),
+    summary: z
+      .string()
+      .min(1)
+      .max(12_000)
+      .describe(
+        "Checkpoint summary: what changed, checks run and their results, pending checks, and known limitations. Do not claim review approval."
       ),
   }),
 });

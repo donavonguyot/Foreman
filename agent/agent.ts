@@ -10,14 +10,15 @@ import { MODELS } from "./lib/models.js";
  * extensions, tools, skills, subagents) is discovered from the filesystem
  * under `agent/`. Conversation history is compacted once it reaches 75% of
  * the context window. The per-session output token limit caps runaway
- * sessions while leaving room for the pipeline: the four stations draw from
- * the root session's remaining quota, and an implementation run needs far
- * more than a chat reply.
+ * sessions. Smaller per-station hook budgets normally stop first and leave
+ * capacity for the root handoff. The built-in root-copy tool is disabled so
+ * work goes through the bounded station wrappers.
  */
 export default defineAgent({
   compaction: { thresholdPercent: 0.75 },
   limits: {
-    maxOutputTokensPerSession: 100_000,
+    maxOutputTokensPerSession: 45_000,
   },
   model: MODELS.orchestrator,
+  tool: false,
 });

@@ -20,10 +20,19 @@ export default defineWorkflowTool({
     "findings.",
   async execute({ message }, ctx) {
     "use workflow";
-    return await ctx.agent("implementer", {
-      message,
-      outputSchema: IMPLEMENTER_OUTPUT_SCHEMA,
-    });
+    try {
+      return await ctx.agent("implementer", {
+        message,
+        outputSchema: IMPLEMENTER_OUTPUT_SCHEMA,
+      });
+    } catch {
+      return {
+        reason:
+          "Station stopped or failed. Do not retry. Preserve any pushed draft, report incomplete checks and unresolved findings, and hand off to a person. Inspect the child trace for the exact stop reason.",
+        stage: "implementer",
+        stopped: true,
+      };
+    }
   },
   inputSchema: z.object({
     message: z
