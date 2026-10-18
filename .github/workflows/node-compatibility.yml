@@ -1,0 +1,93 @@
+name: Node compatibility
+
+# Credential-free compatibility matrix for local/CI development runtimes.
+# Node 24.22.0 is the supported baseline (matches .nvmrc/.node-version);
+# Node 26 is verified for local development and CI only. Deployment stays
+# on Node 24.x (`package.json#engines.node`): Vercel Functions supports
+# Node 24.x and 22.x, not 26.
+#
+# FACTORY_REPO=foreman-ci/compatibility is a harmless placeholder used only
+# so static discovery/compile steps have a repository value. No credentials,
+# Connect, Blob, model calls, GitHub tasks, evals, or sandbox prewarm run here.
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    name: Node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - "24.22.0"
+          - "26"
+    steps:
+      - uses: actions/checkout@v4
+
+      # Installs the pnpm version pinned by package.json#packageManager
+      # (12.14.0). Corepack cannot be used uniformly: Node 26 no longer
+      # ships Corepack.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+
+      - name: Report resolved versions
+        run: |
+          node --version
+          pnpm --version
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm check
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # `pnpm run info` is required: bare `pnpm info` resolves to pnpm's
+      # built-in registry command, not the package script.
+      - name: Discovery (static, no credentials)
+        env:
+          FACTORY_REPO: foreman-ci/compatibility
+        run: pnpm run info
+
+      # Compiled-only build; sandbox prewarm stays disabled so no Vercel
+      # Sandbox or credentialed work happens in CI.
+      - name: Build (compiled-only, no sandbox prewarm)
+        env:
+          FACTORY_REPO: foreman-ci/compatibility
+        run: pnpm build --skip-sandbox-prewarm
+
+      - name: Dev server startup and health probe (bounded)
+        env:
+          FACTORY_REPO: foreman-ci/compatibility
+        run: |
+          pnpm dev --no-ui --port 4820 > dev.log 2>&1 &
+          DEV_PID=$!
+          trap 'kill "$DEV_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            code="$(curl -s -o health.json -w '%{http_code}' --max-time 2 http://127.0.0.1:4820/eve/v1/health || true)"
+            if [ "$code" = "200" ] && grep -q '"ok":true' health.json; then
+              echo "health HTTP 200 after ${i}s"
+              cat health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "dev server did not become healthy within 60s" >&2
+          tail -50 dev.log >&2
+          exit 1
