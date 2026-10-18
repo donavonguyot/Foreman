@@ -32,7 +32,7 @@ Each station is its own agent with its own instructions, sandbox, and tools. The
 
 This fork targets `donavonguyot/Foreman` itself. The bootstrap branch is `bootstrap/node24-self-hosting`; the first Node 26 compatibility draft PR targets that branch so its diff excludes bootstrap changes. Neither PR is merged or marked ready automatically.
 
-Use Node 24.22.0 (`.nvmrc` and `.node-version`) and pnpm 12.14.0. The deployment engine remains `24.x`. Linear is disabled: no Linear channel, MCP connection, credential requirement, or bridging skill is loaded.
+Use Node 24.22.0 (`.nvmrc` and `.node-version`) and pnpm 12.14.0. The deployment engine remains `24.x`: Vercel Functions supports Node 24.x and 22.x, not 26. Node 26 is additionally verified for local development and CI only — see [docs/node-compatibility.md](docs/node-compatibility.md) for the evidence and the `node-compatibility` workflow that re-checks both runtimes. Linear is disabled: no Linear channel, MCP connection, credential requirement, or bridging skill is loaded.
 
 ```bash
 pnpm install --frozen-lockfile

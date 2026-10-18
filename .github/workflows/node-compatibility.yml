@@ -1,0 +1,164 @@
+name: Node compatibility
+
+# Credential-free compatibility matrix for local/CI development runtimes.
+# Node 24.22.0 is the supported baseline (matches .nvmrc/.node-version);
+# Node 26 is verified for local development and CI only. Deployment stays
+# on Node 24.x (`package.json#engines.node`): Vercel Functions supports
+# Node 24.x and 22.x, not 26.
+#
+# FACTORY_REPO=foreman-ci/compatibility is a harmless placeholder used only
+# so static discovery/compile steps have a repository value. No project secrets,
+# Connect, Blob, model calls, GitHub tasks, evals, or sandbox prewarm run here.
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+# Sources are fetched anonymously and setup-node's token input is empty.
+# Request no repository permissions; GitHub Actions cache authentication is
+# separate from the repository and Foreman credentials used by this pilot.
+permissions: {}
+
+jobs:
+  compatibility:
+    name: Node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - "24.22.0"
+          - "26"
+    steps:
+      # Anonymous checkout: this is a public repository and the workflow only
+      # needs read-only sources, so no token is used at any point and nothing
+      # credential-like is written to git configuration. (actions/checkout
+      # would default to `github.token` and persist it into git config.)
+      # Fetch only the triggering commit. If it is unavailable, fail instead
+      # of reporting checks for a different commit after a ref moves.
+      - name: Check out (anonymous, credential-free)
+        run: |
+          git init -q .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          git fetch -q --depth 1 origin "$GITHUB_SHA"
+          git -c advice.detachedHead=false checkout -q --detach FETCH_HEAD
+          if [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo 'checkout does not match the triggering commit' >&2
+            exit 1
+          fi
+          git log -1 --format='checked out %H'
+          if git config --local --list | grep -i -E 'credential|authorization|extraheader'; then
+            echo 'unexpected credential material in git config' >&2
+            exit 1
+          fi
+
+      # Installs the pnpm version pinned by package.json#packageManager
+      # (12.14.0). Corepack cannot be used uniformly: Node 26 no longer
+      # ships Corepack.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Override the action's implicit github.token input.
+          token: ""
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+
+      - name: Report resolved versions
+        run: |
+          node --version
+          pnpm --version
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm check
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Push-policy regression tests
+        run: pnpm test
+
+      # `pnpm run info` is required: bare `pnpm info` resolves to pnpm's
+      # built-in registry command, not the package script.
+      - name: Discovery (static, no credentials)
+        env:
+          FACTORY_REPO: foreman-ci/compatibility
+        run: pnpm run info
+
+      # Compiled-only build; sandbox prewarm stays disabled so no Vercel
+      # Sandbox or credentialed work happens in CI.
+      - name: Build (compiled-only, no sandbox prewarm)
+        env:
+          FACTORY_REPO: foreman-ci/compatibility
+        run: pnpm build --skip-sandbox-prewarm
+
+      # The dev server is started in its own session (setsid). Cleanup must
+      # terminate the complete process tree: eve detaches its local-server
+      # child into its own process group and session, so a bare kill of the
+      # captured PID (or even its process group) leaves descendants alive at
+      # PPID 1 and the port still answering. The EXIT trap runs on success,
+      # probe failure, and timeout; it snapshots every tree member (by
+      # parentage and by session) before signaling, TERMs them, waits, KILLs
+      # stragglers, then verifies that no member survives and that the port
+      # stopped answering before the step reports a result.
+      - name: Dev server startup and health probe (bounded)
+        env:
+          FACTORY_REPO: foreman-ci/compatibility
+        run: |
+          WORK_DIR="$(mktemp -d)"
+          setsid pnpm dev --no-ui --port 4820 > "$WORK_DIR/dev.log" 2>&1 &
+          DEV_SID=$!
+          tree_pids() {
+            echo "$1"
+            local child
+            for child in $(pgrep -P "$1" 2>/dev/null); do
+              tree_pids "$child"
+            done
+          }
+          cleanup() {
+            status=$?
+            TREE="$( { tree_pids "$DEV_SID"; pgrep -s "$DEV_SID" || true; } | sort -un)"
+            TREE_CSV="$(echo $TREE | tr ' ' ',')"
+            kill -TERM $TREE 2>/dev/null || true
+            for _ in $(seq 1 10); do
+              ps -o pid=,state= -p "$TREE_CSV" 2>/dev/null | grep -qv ' Z' || break
+              sleep 1
+            done
+            if ps -o pid=,state= -p "$TREE_CSV" 2>/dev/null | grep -qv ' Z'; then
+              kill -KILL $TREE 2>/dev/null || true
+              sleep 2
+            fi
+            wait "$DEV_SID" 2>/dev/null || true
+            SURVIVORS="$(ps -o pid=,state=,args= -p "$TREE_CSV" 2>/dev/null | grep -v ' Z ' || true)"
+            if [ -n "$SURVIVORS" ]; then
+              echo "dev server processes survived cleanup:" >&2
+              echo "$SURVIVORS" >&2
+              status=1
+            fi
+            if curl -s -o /dev/null --max-time 2 http://127.0.0.1:4820/eve/v1/health; then
+              echo "port 4820 still answering after cleanup" >&2
+              status=1
+            fi
+            rm -rf "$WORK_DIR"
+            exit "$status"
+          }
+          trap cleanup EXIT
+          for i in $(seq 1 60); do
+            code="$(curl -s -o "$WORK_DIR/health.json" -w '%{http_code}' --max-time 2 http://127.0.0.1:4820/eve/v1/health || true)"
+            if [ "$code" = "200" ] && grep -q '"ok":true' "$WORK_DIR/health.json"; then
+              echo "health HTTP 200 after ${i}s"
+              cat "$WORK_DIR/health.json"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "dev server did not become healthy within 60s" >&2
+          tail -50 "$WORK_DIR/dev.log" >&2
+          exit 1
