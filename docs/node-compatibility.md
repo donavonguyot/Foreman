@@ -49,6 +49,35 @@ static discovery and compile have a repository value; no credentials,
 Vercel Connect, Blob, model calls, GitHub tasks, evals, webhook intake, or
 sandbox work were involved in any step.
 
+### Host prerequisite for Node 26: libatomic
+
+The official Node 26 Linux x64 binary links `libatomic.so.1`; the Node 24
+binary does not. The Ubuntu 26.04 host used for this evidence did not have
+libatomic installed, so Node 26 initially failed to start at all:
+
+```
+node: error while loading shared libraries: libatomic.so.1: cannot open
+shared object file: No such file or directory
+```
+
+The Node 26 evidence below was produced with a non-root, environment-only
+workaround — the `libatomic1` package extracted locally and exposed via
+`LD_LIBRARY_PATH` (no system install, nothing persisted outside the
+extraction directory):
+
+```sh
+apt-get download libatomic1   # or fetch the .deb from archive.ubuntu.com
+dpkg-deb -x libatomic1_*.deb "$HOME/libatomic1"
+export LD_LIBRARY_PATH="$HOME/libatomic1/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+```
+
+Anyone repeating the Node 26 run must ensure `libatomic.so.1` is resolvable
+(`ldconfig -p | grep libatomic`), either preinstalled (it usually ships with
+the gcc runtime on desktop/server distributions) or via the workaround
+above. This is a real Node 26 portability caveat that Node 24 does not
+have, so the Node 26 results here are **not** a claim of universal Node 26
+compatibility — they are scoped to hosts where libatomic is available.
+
 ### Node 24.22.0 (baseline)
 
 | Command | Result |
@@ -75,7 +104,9 @@ sandbox work were involved in any step.
 | `FACTORY_REPO=foreman-ci/compatibility pnpm build --skip-sandbox-prewarm` | exit 0 — `[BUILD] built output at .output`, Σ 12.2 MB (2.73 MB gzip) |
 | `FACTORY_REPO=foreman-ci/compatibility pnpm dev --no-ui --port 4826` + loopback poll of `GET /eve/v1/health` | HTTP 200 after 6s — `{"ok":true,"status":"ready","workflowId":"workflow//eve//workflowEntry"}`; process killed after the probe |
 
-No failures were observed on either runtime.
+With that prerequisite in place, every command above succeeded on both
+runtimes; the only Node 26 failure encountered was the missing-libatomic
+startup failure described above, which did not occur under Node 24.
 
 Command notes (pnpm 12): bare `pnpm info` resolves to pnpm's built-in
 registry command rather than the `info` package script, so `pnpm run info`
@@ -90,7 +121,47 @@ Node `24.22.0` / `26` matrix with pnpm 12.14.0 (via `pnpm/action-setup`,
 honoring the `packageManager` pin): frozen install, `pnpm check`,
 `pnpm typecheck`, discovery (`pnpm run info`), compiled-only build with
 `--skip-sandbox-prewarm`, and a bounded (60s) loopback health probe of the
-dev server with cleanup. The workflow is credential-free and read-only.
+dev server.
+
+The dev-server step starts `pnpm dev` in its own session (`setsid`) and
+cleans up on success, probe failure, and timeout via an `EXIT` trap. Plain
+PID or process-group kills are insufficient here: eve detaches its
+local-server child into its own process group and session, so killing only
+the captured pnpm PID leaves descendants running at PPID 1 with the port
+still answering. The trap therefore snapshots the full process tree (by
+parentage and by session) before signaling, sends `SIGTERM`, waits up to
+10s, escalates to `SIGKILL`, and then fails the step if any tree member
+survives or if the port still answers. Logs and the health response live in
+a `mktemp -d` directory that the trap removes.
+
+### Credential boundary
+
+The workflow never uses a credential:
+
+- Sources are fetched **anonymously** over HTTPS (`git init` +
+  `git fetch`): the repository is public and the job is read-only.
+  `actions/checkout` is deliberately not used because it defaults to
+  authenticating with `github.token` and persisting that token into the
+  local git configuration. The checkout step asserts that nothing
+  credential-like (`credential`/`authorization`/`extraheader`) ends up in
+  git config and fails otherwise.
+- The workflow declares `permissions: {}`, so the automatic `GITHUB_TOKEN`
+  for the job carries no scopes even though the runner still receives one;
+  no step references it.
+- No repository or organization secrets are read, and no step talks to
+  Vercel Connect, Blob, models, or the GitHub API.
+- The only Actions-infrastructure token in play is the internal runtime
+  token that `actions/setup-node`'s pnpm-store cache uses; that is runner
+  plumbing for the cache service, not a repository credential, and it is
+  not exposed to any repository-defined command.
+
+This workflow has not yet produced a CI run at the time of writing, so the
+tables above are the verified evidence; the workflow steps (including the
+literal dev-server shell fragment and the anonymous checkout fragment) were
+executed locally under both Node versions as described. If a runner image
+ever lacks `libatomic.so.1`, the Node 26 job will fail at `node` startup
+and the workaround above applies; GitHub-hosted `ubuntu-latest` images were
+not independently inspected for it here.
 
 ## Coverage classification and limitations
 
@@ -107,5 +178,7 @@ dev server with cleanup. The workflow is credential-free and read-only.
   (`engines.node: 24.x`, `.nvmrc`/`.node-version` at 24.22.0) are
   unchanged. Any dashboard-level Vercel Node setting on the linked project
   was not inspected here and remains unverified.
-- Node 26 support claims are limited to the verified local/CI scope above;
-  nothing here claims or enables Node 26 deployment.
+- Node 26 support claims are limited to the verified local/CI scope above
+  and to hosts where `libatomic.so.1` is resolvable (see the host
+  prerequisite); nothing here claims universal Node 26 compatibility or
+  enables Node 26 deployment.
